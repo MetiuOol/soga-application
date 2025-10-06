@@ -57,12 +57,16 @@
             <version>5.0.7.java11</version>
         </dependency>
 
+
+
         <!-- JNA dla embedded -->
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
             <version>5.13.0</version>
         </dependency>
+
+
 
         <!-- Dialekty Hibernate (jeśli ustawiasz FirebirdDialect ręcznie) -->
         <dependency>

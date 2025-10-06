@@ -16,6 +16,9 @@ public class Towar {
     @Column(name = "NAZWA_TW")
     private String nazwaTowaru;
 
+    @Column(name = "ID_GR")
+    private Integer idGrupyTowaru;
+
     public Towar() {
     }
 
@@ -31,11 +34,16 @@ public class Towar {
         return nazwaTowaru;
     }
 
+    public Integer getIdGrupyTowaru() {
+        return idGrupyTowaru;
+    }
+
     @Override
     public String toString() {
         return "Towar{" +
                 "idTowaru=" + idTowaru +
                 ", nazwaTowaru='" + nazwaTowaru + '\'' +
+                ", idGrupyTowaru='" + idGrupyTowaru + '\'' +
                 '}';
     }
 }
