@@ -303,5 +303,57 @@ public class FoodCostService {
         var warehouseIds = configService.getKitchenWarehouses();
         return calculateWarehousePurchases(from, to, warehouseIds, "Kuchnia");
     }
+
+    /**
+     * Oblicza food cost dla kuchni: porównuje zakupy kuchni ze sprzedażą kuchni w danym okresie.
+     * Używa wszystkich typów dokumentów zakupu (FZ, PZ, KFZ, MMP, MM) i całej sprzedaży kuchni.
+     */
+    @Transactional(readOnly = true)
+    public FoodCostSummary calculateFoodCostForKitchen(LocalDate from, LocalDate to, Collection<Integer> sellerIds) {
+        var kitchenProducts = configService.getKitchenProducts();
+        if (kitchenProducts.isEmpty()) {
+            throw new IllegalStateException("Brak skonfigurowanych produktów kuchni (restaurant.kitchen.products)");
+        }
+
+        // Pobierz zakupy kuchni (z wszystkimi typami dokumentów)
+        var warehouseIds = configService.getKitchenWarehouses();
+        if (warehouseIds.isEmpty()) {
+            throw new IllegalStateException("Brak skonfigurowanych magazynów kuchni (restaurant.warehouses.kitchen)");
+        }
+        var purchasesSummary = calculateWarehousePurchases(from, to, warehouseIds, "Kuchnia");
+
+        // Pobierz sprzedaż kuchni
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toDateTime = to.plusDays(1).atStartOfDay();
+        BigDecimal kitchenSales = rachunekRepository.sumaKuchniaBySellers(
+                fromDateTime,
+                toDateTime,
+                kitchenProducts,
+                sellerIds
+        );
+
+        // Oblicz food cost %
+        BigDecimal foodCostPercent = kitchenSales.signum() == 0
+                ? BigDecimal.ZERO
+                : purchasesSummary.purchasesTotalNet()
+                .divide(kitchenSales, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        log.debug("Food cost kuchni {} - {} | sprzedawcy {} | magazyny {} | sprzedaż {} | zakupy {} | food cost {}%",
+                from, to, sellerIds, warehouseIds, kitchenSales, purchasesSummary.purchasesTotalNet(), foodCostPercent);
+
+        return new FoodCostSummary(
+                from,
+                to,
+                List.copyOf(sellerIds),
+                List.copyOf(warehouseIds),
+                kitchenSales,
+                purchasesSummary.purchasesFzNet(),
+                purchasesSummary.purchasesPzNet(),
+                purchasesSummary.purchasesTotalNet(),
+                foodCostPercent
+        );
+    }
 }
 

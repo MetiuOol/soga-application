@@ -63,7 +63,7 @@ public class CommandLineInterface {
         
         while (true) {
             showMainMenu();
-            int choice = getIntInput("Wybierz opcję (1-10): ");
+            int choice = getIntInput("Wybierz opcję (1-11): ");
             
             switch (choice) {
                 case 1 -> generateSalesReport();
@@ -74,8 +74,9 @@ public class CommandLineInterface {
                 case 6 -> showConfiguration();
                 case 7 -> showPointsOfSale();
                 case 8 -> compareSalesReports();
-                case 9 -> calculateFoodCost();
-                case 10 -> {
+                case 9 -> calculateKitchenPurchases();
+                case 10 -> calculateFoodCostForKitchen();
+                case 11 -> {
                     System.out.println("👋 Dziękujemy za korzystanie z systemu!");
                     return;
                 }
@@ -99,7 +100,8 @@ public class CommandLineInterface {
         System.out.println("7. 🏪 Punkty sprzedaży");
         System.out.println("8. 🔁 Porównanie dwóch okresów");
         System.out.println("9. 🧾 Zakupy (podsumowanie)");
-        System.out.println("10. 🚪 Wyjście");
+        System.out.println("10. 💰 Food Cost (zakupy kuchni vs sprzedaż kuchni)");
+        System.out.println("11. 🚪 Wyjście");
     }
     
     private void generateSalesReport() {
@@ -299,7 +301,7 @@ public class CommandLineInterface {
         }
     }
 
-    private void calculateFoodCost() {
+    private void calculateKitchenPurchases() {
         System.out.println("\n🧾 ZAKUPY");
         System.out.println("-".repeat(40));
 
@@ -366,6 +368,70 @@ public class CommandLineInterface {
             System.out.println(formatter.formatKitchenPurchasesSummary(summary));
         } catch (Exception e) {
             System.err.println("❌ Błąd podczas wyliczania zakupów: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void calculateFoodCostForKitchen() {
+        System.out.println("\n💰 FOOD COST KUCHNI");
+        System.out.println("-".repeat(40));
+
+        System.out.println("\nWybierz sprzedawców:");
+        System.out.println("1. Kuchnia Domowa");
+        System.out.println("2. Ratuszowa");
+        System.out.println("3. Wszyscy");
+        System.out.println("4. Własny wybór");
+        int sellerChoice = getIntInput("Wybierz opcję (1-4): ");
+
+        List<Integer> selectedSellers;
+        switch (sellerChoice) {
+            case 1 -> {
+                var kd = pointOfSaleService.getPointOfSale("KD");
+                selectedSellers = kd.map(PointOfSale::getSellerIds).orElse(configService.getDefaultSellers());
+            }
+            case 2 -> {
+                var ratuszowa = pointOfSaleService.getPointOfSale("Ratuszowa");
+                selectedSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
+            }
+            case 3 -> selectedSellers = configService.getAllSellers();
+            case 4 -> {
+                System.out.print("Podaj ID sprzedawców (oddzielone przecinkami, np. 11,12,13): ");
+                String input = scanner.nextLine().trim();
+                selectedSellers = Arrays.stream(input.split(","))
+                        .map(String::trim)
+                        .map(Integer::parseInt)
+                        .toList();
+            }
+            default -> {
+                System.err.println("❌ Nieprawidłowy wybór. Używam domyślnych sprzedawców.");
+                selectedSellers = configService.getDefaultSellers();
+            }
+        }
+
+        System.out.println("\nWybierz okres:");
+        System.out.println("1. Cały miesiąc");
+        System.out.println("2. Dowolny zakres");
+        int periodChoice = getIntInput("Wybierz opcję (1-2): ");
+
+        LocalDate from;
+        LocalDate to;
+
+        if (periodChoice == 1) {
+            int year = getIntInput("Podaj rok (np. 2025): ");
+            int month = getIntInput("Podaj miesiąc (1-12): ");
+            from = LocalDate.of(year, month, 1);
+            to = from.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
+            System.out.println("📅 Zakres miesiąca: " + from + " - " + to);
+        } else {
+            from = getDateInput("Data początkowa (YYYY-MM-DD): ");
+            to = getDateInput("Data końcowa (YYYY-MM-DD): ");
+        }
+
+        try {
+            var summary = foodCostService.calculateFoodCostForKitchen(from, to, selectedSellers);
+            System.out.println(formatter.formatFoodCostSummary(summary));
+        } catch (Exception e) {
+            System.err.println("❌ Błąd podczas obliczania food cost: " + e.getMessage());
             e.printStackTrace();
         }
     }
