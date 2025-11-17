@@ -21,6 +21,14 @@ public class PodsumowanieTygodnia {
         this.lacznaIloscOsob = lacznaIloscOsob;
     }
 
+    // Getters
+    public int getRok() { return rok; }
+    public int getNumerTygodnia() { return numerTygodnia; }
+    public BigDecimal getSumaNetto() { return sumaNetto; }
+    public BigDecimal getSumaBrutto() { return sumaBrutto; }
+    public int getLiczbaRachunkow() { return liczbaRachunkow; }
+    public int getLacznaIloscOsob() { return lacznaIloscOsob; }
+
     @Override
     public String toString() {
         return "Tydzień " + numerTygodnia +

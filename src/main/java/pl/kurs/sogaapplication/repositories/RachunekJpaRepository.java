@@ -135,9 +135,12 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
   """, nativeQuery = true)
     BigDecimal sumaRazem(@Param("from") LocalDateTime from,
                          @Param("to")   LocalDateTime to);
+    /**
+     * Suma sprzedaży KUCHNI liczona po konkretnych towarach (ID_TW), z korektą zestawów.
+     */
     @Query(value = """
   SELECT COALESCE(SUM(
-           CASE WHEN t.ID_GR IN (:groupIds) THEN
+           CASE WHEN p.ID_TW IN (:productIds) THEN
                 CASE WHEN p.NR_POZ_KOR > 0
                      THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)  -- dziecko * ilość rodzica
                      ELSE p.WART_NU                                     -- zwykła pozycja
@@ -150,12 +153,11 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
          ON parent.ID_RACH = p.ID_RACH
         AND parent.NR_POZ  = p.NR_POZ
         AND parent.NR_POZ_KOR = 0
-  LEFT JOIN TOWARY t     ON t.ID_TW   = p.ID_TW
   WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
   """, nativeQuery = true)
     BigDecimal sumaKuchnia(@Param("from") LocalDateTime from,
                            @Param("to")   LocalDateTime to,
-                           @Param("groupIds") Collection<Integer> groupIds);
+                           @Param("productIds") Collection<Long> productIds);
 
 
 //    @Query(value = """
@@ -188,10 +190,20 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
                                   @Param("to")   LocalDateTime to,
                                   @Param("sellerIds") Collection<Integer> sellerIds);
 
-    // KUCHNIA z korektą zestawów (dziecko * ilość rodzica) + filtr po sprzedawcach
+    @Query(value = """
+  SELECT COUNT(*)
+  FROM RACHUNKI r
+  WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
+    AND r.ID_UZ IN (:sellerIds)
+  """, nativeQuery = true)
+    long liczbaRachunkowBySellers(@Param("from") LocalDateTime from,
+                                  @Param("to")   LocalDateTime to,
+                                  @Param("sellerIds") Collection<Integer> sellerIds);
+
+    // KUCHNIA po konkretnych towarach (ID_TW) z korektą zestawów + filtr po sprzedawcach
     @Query(value = """
   SELECT COALESCE(SUM(
-           CASE WHEN t.ID_GR IN (:groupIds) THEN
+           CASE WHEN p.ID_TW IN (:productIds) THEN
                 CASE WHEN p.NR_POZ_KOR > 0
                      THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
                      ELSE p.WART_NU
@@ -204,13 +216,50 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
          ON parent.ID_RACH = p.ID_RACH
         AND parent.NR_POZ  = p.NR_POZ
         AND parent.NR_POZ_KOR = 0
-  LEFT JOIN TOWARY t     ON t.ID_TW   = p.ID_TW
   WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
     AND r.ID_UZ IN (:sellerIds)
   """, nativeQuery = true)
     BigDecimal sumaKuchniaBySellers(@Param("from") LocalDateTime from,
                                     @Param("to")   LocalDateTime to,
-                                    @Param("groupIds") Collection<Integer> groupIds,
+                                    @Param("productIds") Collection<Long> productIds,
                                     @Param("sellerIds") Collection<Integer> sellerIds);
+
+    // Diagnostyczne zapytanie do sprawdzania grup towarów używanych przez Kuchnię Domową
+    @Query(value = """
+            SELECT
+                t.ID_GR,
+                COUNT(DISTINCT p.ID_RACH),
+                COUNT(DISTINCT p.ID_TW),
+                COALESCE(SUM(
+                    CASE WHEN p.NR_POZ_KOR > 0
+                         THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                         ELSE p.WART_NU
+                    END
+                ), 0),
+                COALESCE(SUM(p.ILOSC), 0)
+            FROM POZRACH p
+            JOIN RACHUNKI r ON r.ID_RACH = p.ID_RACH
+            LEFT JOIN POZRACH parent
+                   ON parent.ID_RACH = p.ID_RACH
+                  AND parent.NR_POZ  = p.NR_POZ
+                  AND parent.NR_POZ_KOR = 0
+            LEFT JOIN TOWARY t ON t.ID_TW = p.ID_TW
+            WHERE r.ID_UZ = :sellerId
+              AND r.DATA_ROZ >= :from
+              AND r.DATA_ROZ < :to
+              AND t.ID_GR IS NOT NULL
+            GROUP BY t.ID_GR
+            ORDER BY COALESCE(SUM(
+                CASE WHEN p.NR_POZ_KOR > 0
+                     THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                     ELSE p.WART_NU
+                END
+            ), 0) DESC
+            """, nativeQuery = true)
+    List<Object[]> findProductGroupsBySeller(
+            @Param("sellerId") Integer sellerId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
 
 }

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sprzedazMiesiac from="2025-07-01" to="2025-07-31" sellerIds="11">
+  <dzien data="2025-07-01">
+    <kuchnia>6955.56000</kuchnia>
+    <bufet>128.44000</bufet>
+    <suma>7084.00</suma>
+  </dzien>
+  <dzien data="2025-07-02">
+    <kuchnia>5000.27000</kuchnia>
+    <bufet>161.80000</bufet>
+    <suma>5162.07</suma>
+  </dzien>
+  <dzien data="2025-07-03">
+    <kuchnia>2137.47000</kuchnia>
+    <bufet>96.18000</bufet>
+    <suma>2233.65</suma>
+  </dzien>
+  <dzien data="2025-07-04">
+    <kuchnia>5415.03000</kuchnia>
+    <bufet>169.41000</bufet>
+    <suma>5584.44</suma>
+  </dzien>
+  <dzien data="2025-07-05">
+    <kuchnia>2059.72000</kuchnia>
+    <bufet>75.75000</bufet>
+    <suma>2135.47</suma>
+  </dzien>
+  <dzien data="2025-07-06">
+    <kuchnia>0.00000</kuchnia>
+    <bufet>0.00000</bufet>
+    <suma>0.00</suma>
+  </dzien>
+  <dzien data="2025-07-07">
+    <kuchnia>4530.69000</kuchnia>
+    <bufet>121.96000</bufet>
+    <suma>4652.65</suma>
+  </dzien>
+  <dzien data="2025-07-08">
+    <kuchnia>3400.04000</kuchnia>
+    <bufet>78.11000</bufet>
+    <suma>3478.15</suma>
+  </dzien>
+  <dzien data="2025-07-09">
+    <kuchnia>3989.55000</kuchnia>
+    <bufet>71.18000</bufet>
+    <suma>4060.73</suma>
+  </dzien>
+  <dzien data="2025-07-10">
+    <kuchnia>3113.10000</kuchnia>
+    <bufet>106.57000</bufet>
+    <suma>3219.67</suma>
+  </dzien>
+  <dzien data="2025-07-11">
+    <kuchnia>2945.10000</kuchnia>
+    <bufet>127.64000</bufet>
+    <suma>3072.74</suma>
+  </dzien>
+  <dzien data="2025-07-12">
+    <kuchnia>764.61000</kuchnia>
+    <bufet>31.31000</bufet>
+    <suma>795.92</suma>
+  </dzien>
+  <dzien data="2025-07-13">
+    <kuchnia>0.00000</kuchnia>
+    <bufet>0.00000</bufet>
+    <suma>0.00</suma>
+  </dzien>
+  <dzien data="2025-07-14">
+    <kuchnia>2804.22000</kuchnia>
+    <bufet>95.22000</bufet>
+    <suma>2899.44</suma>
+  </dzien>
+  <dzien data="2025-07-15">
+    <kuchnia>5022.16000</kuchnia>
+    <bufet>117.16000</bufet>
+    <suma>5139.32</suma>
+  </dzien>
+  <dzien data="2025-07-16">
+    <kuchnia>3743.77000</kuchnia>
+    <bufet>141.57000</bufet>
+    <suma>3885.34</suma>
+  </dzien>
+  <dzien data="2025-07-17">
+    <kuchnia>2752.65000</kuchnia>
+    <bufet>105.17000</bufet>
+    <suma>2857.82</suma>
+  </dzien>
+  <dzien data="2025-07-18">
+    <kuchnia>5313.51000</kuchnia>
+    <bufet>422.83000</bufet>
+    <suma>5736.34</suma>
+  </dzien>
+  <dzien data="2025-07-19">
+    <kuchnia>1705.95000</kuchnia>
+    <bufet>175.85000</bufet>
+    <suma>1881.80</suma>
+  </dzien>
+  <dzien data="2025-07-20">
+    <kuchnia>0.00000</kuchnia>
+    <bufet>0.00000</bufet>
+    <suma>0.00</suma>
+  </dzien>
+  <dzien data="2025-07-21">
+    <kuchnia>3689.91000</kuchnia>
+    <bufet>178.10000</bufet>
+    <suma>3868.01</suma>
+  </dzien>
+  <dzien data="2025-07-22">
+    <kuchnia>5801.62000</kuchnia>
+    <bufet>127.67000</bufet>
+    <suma>5929.29</suma>
+  </dzien>
+  <dzien data="2025-07-23">
+    <kuchnia>3991.42000</kuchnia>
+    <bufet>130.75000</bufet>
+    <suma>4122.17</suma>
+  </dzien>
+  <dzien data="2025-07-24">
+    <kuchnia>5376.84000</kuchnia>
+    <bufet>146.28000</bufet>
+    <suma>5523.12</suma>
+  </dzien>
+  <dzien data="2025-07-25">
+    <kuchnia>5602.06000</kuchnia>
+    <bufet>207.56000</bufet>
+    <suma>5809.62</suma>
+  </dzien>
+  <dzien data="2025-07-26">
+    <kuchnia>1124.91000</kuchnia>
+    <bufet>51.63000</bufet>
+    <suma>1176.54</suma>
+  </dzien>
+  <dzien data="2025-07-27">
+    <kuchnia>0.00000</kuchnia>
+    <bufet>0.00000</bufet>
+    <suma>0.00</suma>
+  </dzien>
+  <dzien data="2025-07-28">
+    <kuchnia>4526.42000</kuchnia>
+    <bufet>149.10000</bufet>
+    <suma>4675.52</suma>
+  </dzien>
+  <dzien data="2025-07-29">
+    <kuchnia>4982.47000</kuchnia>
+    <bufet>156.09000</bufet>
+    <suma>5138.56</suma>
+  </dzien>
+  <dzien data="2025-07-30">
+    <kuchnia>4868.57000</kuchnia>
+    <bufet>176.64000</bufet>
+    <suma>5045.21</suma>
+  </dzien>
+  <dzien data="2025-07-31">
+    <kuchnia>5179.63000</kuchnia>
+    <bufet>99.23000</bufet>
+    <suma>5278.86</suma>
+  </dzien>
+</sprzedazMiesiac>
