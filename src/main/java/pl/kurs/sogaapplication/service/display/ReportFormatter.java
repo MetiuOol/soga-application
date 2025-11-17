@@ -68,19 +68,25 @@ public class ReportFormatter {
     public String formatKitchenPurchasesSummary(KitchenPurchasesSummary summary) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("🧾 ZAKUPY KUCHNI\n");
+        sb.append("🧾 ZAKUPY ").append(summary.warehouseName().toUpperCase()).append("\n");
         sb.append("=".repeat(80)).append("\n");
         sb.append(String.format("📅 Okres: %s - %s\n",
                 summary.from().format(DATE_FORMAT),
                 summary.to().format(DATE_FORMAT)));
-        sb.append(String.format("🏬 Magazyny kuchni (ID_MA): %s\n", summary.warehouseIds()));
+        sb.append(String.format("🏬 Magazyny %s (ID_MA): %s\n", summary.warehouseName(), summary.warehouseIds()));
         sb.append("\n");
 
         sb.append(String.format("🧾 Zakupy netto FZ:            %15s\n", CURRENCY_FORMAT.format(summary.purchasesFzNet())));
         sb.append(String.format("📄 Zakupy netto PZ (bez FZ):   %15s\n", CURRENCY_FORMAT.format(summary.purchasesPzNet())));
         sb.append(String.format("📝 Zakupy netto KFZ:           %15s\n", CURRENCY_FORMAT.format(summary.purchasesKfzNet())));
-        sb.append(String.format("🔄 Zakupy netto MMP (bufet→kuchnia): %15s\n", CURRENCY_FORMAT.format(summary.purchasesMmpNet())));
-        sb.append(String.format("⬅️  Przeniesienia MM (kuchnia→bufet): %15s\n", CURRENCY_FORMAT.format(summary.purchasesMmNet())));
+        String mmpLabel = "Kuchnia".equals(summary.warehouseName()) 
+                ? "MMP (bufet→kuchnia)" 
+                : "MMP (kuchnia→bufet)";
+        String mmLabel = "Kuchnia".equals(summary.warehouseName()) 
+                ? "MM (kuchnia→bufet)" 
+                : "MM (bufet→kuchnia)";
+        sb.append(String.format("🔄 Zakupy netto MMP (%s): %15s\n", mmpLabel, CURRENCY_FORMAT.format(summary.purchasesMmpNet())));
+        sb.append(String.format("⬅️  Przeniesienia MM (%s): %15s\n", mmLabel, CURRENCY_FORMAT.format(summary.purchasesMmNet())));
         sb.append(String.format("🧮 Zakupy netto łącznie:       %15s\n", CURRENCY_FORMAT.format(summary.purchasesTotalNet())));
         sb.append("\n");
 

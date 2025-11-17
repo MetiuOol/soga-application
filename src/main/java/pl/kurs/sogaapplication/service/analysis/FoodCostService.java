@@ -104,28 +104,42 @@ public class FoodCostService {
     }
 
     /**
-     * Proste podsumowanie zakupów kuchni z wybranego okresu (bez porównania ze sprzedażą).
+     * Proste podsumowanie zakupów magazynu z wybranego okresu (bez porównania ze sprzedażą).
+     * Obsługuje zarówno kuchnię, jak i bufet.
      */
     @Transactional(readOnly = true)
-    public KitchenPurchasesSummary calculateKitchenPurchases(LocalDate from, LocalDate to) {
-        var warehouseIds = configService.getKitchenWarehouses();
+    public KitchenPurchasesSummary calculateWarehousePurchases(LocalDate from, LocalDate to, 
+                                                               List<Integer> warehouseIds, String warehouseName) {
         if (warehouseIds.isEmpty()) {
-            throw new IllegalStateException("Brak skonfigurowanych magazynów kuchni (restaurant.warehouses.kitchen)");
+            throw new IllegalStateException("Brak skonfigurowanych magazynów: " + warehouseName);
         }
 
         LocalDate toExclusive = to.plusDays(1);
+        
+        // Pobierz magazyny z konfiguracji dla przeniesień
+        var kitchenWarehouses = configService.getKitchenWarehouses();
+        var buffetWarehouses = configService.getBuffetWarehouses();
+        Integer kitchenWarehouseId = kitchenWarehouses.isEmpty() ? 8 : kitchenWarehouses.get(0);
+        Integer buffetWarehouseId = buffetWarehouses.isEmpty() ? 9 : buffetWarehouses.get(0);
+        
+        // Zakupy podstawowe: FZ, PZ, KFZ
         BigDecimal purchasesFz = dokumentRepository.sumFzNettoByWarehouses(from, toExclusive, warehouseIds);
         BigDecimal purchasesPz = dokumentRepository.sumStandalonePzNettoByWarehouses(from, toExclusive, warehouseIds);
         BigDecimal purchasesKfz = dokumentRepository.sumKfzNettoByWarehouses(from, toExclusive, warehouseIds);
         
-        // MMP: przeniesienia z bufetu (9) do kuchni (8)
-        var buffetWarehouses = configService.getBuffetWarehouses();
-        Integer buffetWarehouseId = buffetWarehouses.isEmpty() ? 9 : buffetWarehouses.get(0); // domyślnie 9
-        Integer kitchenWarehouseId = warehouseIds.get(0); // pierwszy magazyn kuchni (domyślnie 8)
-        BigDecimal purchasesMmp = dokumentRepository.sumMmpNettoByWarehouses(from, toExclusive, kitchenWarehouseId, buffetWarehouseId);
+        BigDecimal purchasesMmp = BigDecimal.ZERO;
+        BigDecimal purchasesMm = BigDecimal.ZERO;
         
-        // MM: przeniesienia z kuchni (8) - odejmujemy od zakupów (ID_MA_2 dowolny)
-        BigDecimal purchasesMm = dokumentRepository.sumMmNettoByWarehouses(from, toExclusive, kitchenWarehouseId);
+        // MMP i MM zależą od wybranego magazynu
+        if ("Kuchnia".equals(warehouseName)) {
+            // Dla kuchni: MMP z bufetu do kuchni (dodawane), MM z kuchni (odejmowane)
+            purchasesMmp = dokumentRepository.sumMmpNettoByWarehouses(from, toExclusive, kitchenWarehouseId, buffetWarehouseId);
+            purchasesMm = dokumentRepository.sumMmNettoByWarehouses(from, toExclusive, kitchenWarehouseId);
+        } else if ("Bufet".equals(warehouseName)) {
+            // Dla bufetu: MMP z kuchni do bufetu (dodawane), MM z bufetu (odejmowane)
+            purchasesMmp = dokumentRepository.sumMmpNettoByWarehouses(from, toExclusive, buffetWarehouseId, kitchenWarehouseId);
+            purchasesMm = dokumentRepository.sumMmNettoByWarehouses(from, toExclusive, buffetWarehouseId);
+        }
         
         BigDecimal totalPurchases = purchasesFz.add(purchasesPz).add(purchasesKfz).add(purchasesMmp).subtract(purchasesMm);
 
@@ -133,8 +147,17 @@ public class FoodCostService {
         List<Object[]> fzDocs = dokumentRepository.findFzDocumentsByWarehouses(from, toExclusive, warehouseIds);
         List<Object[]> pzDocs = dokumentRepository.findStandalonePzDocumentsByWarehouses(from, toExclusive, warehouseIds);
         List<Object[]> kfzDocs = dokumentRepository.findKfzDocumentsByWarehouses(from, toExclusive, warehouseIds);
-        List<Object[]> mmpDocs = dokumentRepository.findMmpDocumentsByWarehouses(from, toExclusive, kitchenWarehouseId, buffetWarehouseId);
-        List<Object[]> mmDocs = dokumentRepository.findMmDocumentsByWarehouses(from, toExclusive, kitchenWarehouseId);
+        
+        List<Object[]> mmpDocs;
+        List<Object[]> mmDocs;
+        
+        if ("Kuchnia".equals(warehouseName)) {
+            mmpDocs = dokumentRepository.findMmpDocumentsByWarehouses(from, toExclusive, kitchenWarehouseId, buffetWarehouseId);
+            mmDocs = dokumentRepository.findMmDocumentsByWarehouses(from, toExclusive, kitchenWarehouseId);
+        } else {
+            mmpDocs = dokumentRepository.findMmpDocumentsByWarehouses(from, toExclusive, buffetWarehouseId, kitchenWarehouseId);
+            mmDocs = dokumentRepository.findMmDocumentsByWarehouses(from, toExclusive, buffetWarehouseId);
+        }
         
         List<DokumentZakupuDto> dokumenty = new java.util.ArrayList<>();
         
@@ -253,12 +276,13 @@ public class FoodCostService {
             ));
         }
 
-        log.debug("Zakupy kuchni {} - {} | magazyny {} | FZ {} | PZ {} | KFZ {} | MMP {} | MM {} | razem {} | dokumentów: {}",
-                from, to, warehouseIds, purchasesFz, purchasesPz, purchasesKfz, purchasesMmp, purchasesMm, totalPurchases, dokumenty.size());
+        log.debug("Zakupy {} {} - {} | magazyny {} | FZ {} | PZ {} | KFZ {} | MMP {} | MM {} | razem {} | dokumentów: {}",
+                warehouseName, from, to, warehouseIds, purchasesFz, purchasesPz, purchasesKfz, purchasesMmp, purchasesMm, totalPurchases, dokumenty.size());
 
         return new KitchenPurchasesSummary(
                 from,
                 to,
+                warehouseName,
                 List.copyOf(warehouseIds),
                 purchasesFz,
                 purchasesPz,
@@ -268,6 +292,16 @@ public class FoodCostService {
                 totalPurchases,
                 dokumenty
         );
+    }
+
+    /**
+     * Proste podsumowanie zakupów kuchni z wybranego okresu (bez porównania ze sprzedażą).
+     * Metoda pomocnicza dla kompatybilności wstecznej.
+     */
+    @Transactional(readOnly = true)
+    public KitchenPurchasesSummary calculateKitchenPurchases(LocalDate from, LocalDate to) {
+        var warehouseIds = configService.getKitchenWarehouses();
+        return calculateWarehousePurchases(from, to, warehouseIds, "Kuchnia");
     }
 }
 

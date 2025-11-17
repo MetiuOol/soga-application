@@ -5,11 +5,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Podsumowanie zakupów kuchni z wybranego okresu.
+ * Podsumowanie zakupów magazynu z wybranego okresu.
  */
 public record KitchenPurchasesSummary(
         LocalDate from,
         LocalDate to,
+        String warehouseName,
         List<Integer> warehouseIds,
         BigDecimal purchasesFzNet,
         BigDecimal purchasesPzNet,

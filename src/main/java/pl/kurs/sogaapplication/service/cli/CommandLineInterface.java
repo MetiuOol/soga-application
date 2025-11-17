@@ -98,7 +98,7 @@ public class CommandLineInterface {
         System.out.println("6. ⚙️  Konfiguracja");
         System.out.println("7. 🏪 Punkty sprzedaży");
         System.out.println("8. 🔁 Porównanie dwóch okresów");
-        System.out.println("9. 🧾 Zakupy kuchni (podsumowanie)");
+        System.out.println("9. 🧾 Zakupy (podsumowanie)");
         System.out.println("10. 🚪 Wyjście");
     }
     
@@ -300,8 +300,47 @@ public class CommandLineInterface {
     }
 
     private void calculateFoodCost() {
-        System.out.println("\n🧾 ZAKUPY KUCHNI");
+        System.out.println("\n🧾 ZAKUPY");
         System.out.println("-".repeat(40));
+
+        System.out.println("\nWybierz magazyn:");
+        var kitchenWarehouses = configService.getKitchenWarehouses();
+        var buffetWarehouses = configService.getBuffetWarehouses();
+        
+        System.out.println("1. 🍳 Kuchnia (magazyny: " + kitchenWarehouses + ")");
+        System.out.println("2. 🥤 Bufet (magazyny: " + buffetWarehouses + ")");
+        
+        int warehouseChoice = getIntInput("Wybierz opcję (1-2): ");
+        
+        List<Integer> selectedWarehouses;
+        String warehouseName;
+        
+        switch (warehouseChoice) {
+            case 1:
+                if (kitchenWarehouses.isEmpty()) {
+                    System.err.println("❌ Brak skonfigurowanych magazynów kuchni!");
+                    return;
+                }
+                selectedWarehouses = kitchenWarehouses;
+                warehouseName = "Kuchnia";
+                break;
+            case 2:
+                if (buffetWarehouses.isEmpty()) {
+                    System.err.println("❌ Brak skonfigurowanych magazynów bufetu!");
+                    return;
+                }
+                selectedWarehouses = buffetWarehouses;
+                warehouseName = "Bufet";
+                break;
+            default:
+                System.err.println("❌ Nieprawidłowy wybór. Używam Kuchni.");
+                if (kitchenWarehouses.isEmpty()) {
+                    return;
+                }
+                selectedWarehouses = kitchenWarehouses;
+                warehouseName = "Kuchnia";
+                break;
+        }
 
         System.out.println("\nWybierz okres:");
         System.out.println("1. Cały miesiąc");
@@ -323,7 +362,7 @@ public class CommandLineInterface {
         }
 
         try {
-            var summary = foodCostService.calculateKitchenPurchases(from, to);
+            var summary = foodCostService.calculateWarehousePurchases(from, to, selectedWarehouses, warehouseName);
             System.out.println(formatter.formatKitchenPurchasesSummary(summary));
         } catch (Exception e) {
             System.err.println("❌ Błąd podczas wyliczania zakupów: " + e.getMessage());

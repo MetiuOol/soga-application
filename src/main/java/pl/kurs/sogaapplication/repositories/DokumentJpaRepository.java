@@ -33,12 +33,7 @@ public interface DokumentJpaRepository extends JpaRepository<Dokument, Long> {
         WHERE p.TYP_DOK = 'PZ'
           AND p.DATA_WST >= :from AND p.DATA_WST < :to
           AND p.ID_MA IN (:warehouseIds)
-          AND NOT EXISTS (
-                SELECT 1
-                FROM DOKUMENTY f
-                WHERE f.ID_POCHOD = p.ID_DOK
-                  AND f.TYP_DOK = 'FZ'
-            )
+          AND (p.ID_POCHOD = 0 OR p.ID_POCHOD IS NULL)
         """, nativeQuery = true)
     BigDecimal sumStandalonePzNettoByWarehouses(@Param("from") LocalDate from,
                                                 @Param("to") LocalDate to,
