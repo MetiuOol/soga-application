@@ -41,18 +41,26 @@ public class ReportFormatter {
      * Formatuje raport food cost (zakupy vs sprzedaż kuchni).
      */
     public String formatFoodCostSummary(FoodCostSummary summary) {
+        return formatFoodCostSummary(summary, "Kuchnia");
+    }
+
+    public String formatFoodCostSummary(FoodCostSummary summary, String category) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("🥘 FOOD COST – KUCHNIA\n");
+        String title = "Kuchnia".equals(category) ? "🥘 FOOD COST – KUCHNIA" : "🥤 FOOD COST – BUFET";
+        String salesLabel = "Kuchnia".equals(category) ? "🍳 Sprzedaż kuchni netto" : "🥤 Sprzedaż bufetu netto";
+        String warehouseLabel = "Kuchnia".equals(category) ? "🏬 Magazyny kuchni (ID_MA)" : "🏬 Magazyny bufetu (ID_MA)";
+        
+        sb.append(title).append("\n");
         sb.append("=".repeat(80)).append("\n");
         sb.append(String.format("📅 Okres: %s - %s\n",
                 summary.from().format(DATE_FORMAT),
                 summary.to().format(DATE_FORMAT)));
         sb.append(String.format("👥 Sprzedawcy: %s\n", summary.sellerIds()));
-        sb.append(String.format("🏬 Magazyny kuchni (ID_MA): %s\n", summary.warehouseIds()));
+        sb.append(String.format("%s: %s\n", warehouseLabel, summary.warehouseIds()));
         sb.append("\n");
 
-        sb.append(String.format("🍳 Sprzedaż kuchni netto:      %15s\n", CURRENCY_FORMAT.format(summary.kitchenSalesNet())));
+        sb.append(String.format("%s:      %15s\n", salesLabel, CURRENCY_FORMAT.format(summary.kitchenSalesNet())));
         sb.append(String.format("🧾 Zakupy netto FZ:            %15s\n", CURRENCY_FORMAT.format(summary.purchasesFzNet())));
         sb.append(String.format("📄 Zakupy netto PZ (bez FZ):   %15s\n", CURRENCY_FORMAT.format(summary.purchasesPzNet())));
         sb.append(String.format("🧮 Zakupy netto łącznie:       %15s\n", CURRENCY_FORMAT.format(summary.purchasesTotalNet())));

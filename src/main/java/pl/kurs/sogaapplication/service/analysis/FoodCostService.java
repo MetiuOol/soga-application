@@ -355,5 +355,68 @@ public class FoodCostService {
                 foodCostPercent
         );
     }
+
+    /**
+     * Oblicza food cost dla bufetu: porównuje zakupy bufetu ze sprzedażą bufetu w danym okresie.
+     * Używa wszystkich typów dokumentów zakupu (FZ, PZ, KFZ, MMP, MM) i całej sprzedaży bufetu.
+     * Sprzedaż bufetu = całkowita sprzedaż - sprzedaż kuchni - sprzedaż opakowań - sprzedaż dowozu.
+     */
+    @Transactional(readOnly = true)
+    public FoodCostSummary calculateFoodCostForBuffet(LocalDate from, LocalDate to, Collection<Integer> sellerIds) {
+        var kitchenProducts = configService.getKitchenProducts();
+        var packagingProducts = configService.getPackagingProducts();
+        var deliveryProducts = configService.getDeliveryProducts();
+
+        // Pobierz zakupy bufetu (z wszystkimi typami dokumentów)
+        var warehouseIds = configService.getBuffetWarehouses();
+        if (warehouseIds.isEmpty()) {
+            throw new IllegalStateException("Brak skonfigurowanych magazynów bufetu (restaurant.warehouses.buffet)");
+        }
+        var purchasesSummary = calculateWarehousePurchases(from, to, warehouseIds, "Bufet");
+
+        // Pobierz sprzedaż bufetu
+        LocalDateTime fromDateTime = from.atStartOfDay();
+        LocalDateTime toDateTime = to.plusDays(1).atStartOfDay();
+        
+        BigDecimal totalSales = rachunekRepository.sumaRazemBySellers(fromDateTime, toDateTime, sellerIds);
+        BigDecimal kitchenSales = (kitchenProducts == null || kitchenProducts.isEmpty())
+                ? BigDecimal.ZERO
+                : rachunekRepository.sumaKuchniaBySellers(fromDateTime, toDateTime, kitchenProducts, sellerIds);
+        BigDecimal packagingSales = (packagingProducts == null || packagingProducts.isEmpty())
+                ? BigDecimal.ZERO
+                : rachunekRepository.sumaKuchniaBySellers(fromDateTime, toDateTime, packagingProducts, sellerIds);
+        BigDecimal deliverySales = (deliveryProducts == null || deliveryProducts.isEmpty())
+                ? BigDecimal.ZERO
+                : rachunekRepository.sumaKuchniaBySellers(fromDateTime, toDateTime, deliveryProducts, sellerIds);
+        
+        BigDecimal buffetSales = totalSales
+                .subtract(kitchenSales)
+                .subtract(packagingSales)
+                .subtract(deliverySales);
+
+        // Oblicz food cost %
+        BigDecimal foodCostPercent = buffetSales.signum() == 0
+                ? BigDecimal.ZERO
+                : purchasesSummary.purchasesTotalNet()
+                .divide(buffetSales, 4, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .setScale(2, RoundingMode.HALF_UP);
+
+        log.debug("Food cost bufetu {} - {} | sprzedawcy {} | magazyny {} | sprzedaż bufetu {} | zakupy {} | food cost {}%",
+                from, to, sellerIds, warehouseIds, buffetSales, purchasesSummary.purchasesTotalNet(), foodCostPercent);
+
+        // Używamy FoodCostSummary, ale pole kitchenSalesNet reprezentuje w tym przypadku buffetSalesNet
+        return new FoodCostSummary(
+                from,
+                to,
+                List.copyOf(sellerIds),
+                List.copyOf(warehouseIds),
+                buffetSales, // w tym przypadku to buffetSales, nie kitchenSales
+                purchasesSummary.purchasesFzNet(),
+                purchasesSummary.purchasesPzNet(),
+                purchasesSummary.purchasesTotalNet(),
+                foodCostPercent
+        );
+    }
 }
 

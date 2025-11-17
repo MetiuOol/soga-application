@@ -1,6 +1,7 @@
 package pl.kurs.sogaapplication.service.cli;
 
 import org.springframework.stereotype.Component;
+import pl.kurs.sogaapplication.dto.FoodCostSummary;
 import pl.kurs.sogaapplication.dto.RestaurantReportDto;
 import pl.kurs.sogaapplication.models.ObrotSprzedawcyGodzina;
 import pl.kurs.sogaapplication.models.business.PointOfSale;
@@ -75,7 +76,7 @@ public class CommandLineInterface {
                 case 7 -> showPointsOfSale();
                 case 8 -> compareSalesReports();
                 case 9 -> calculateKitchenPurchases();
-                case 10 -> calculateFoodCostForKitchen();
+                case 10 -> calculateFoodCost();
                 case 11 -> {
                     System.out.println("👋 Dziękujemy za korzystanie z systemu!");
                     return;
@@ -100,7 +101,7 @@ public class CommandLineInterface {
         System.out.println("7. 🏪 Punkty sprzedaży");
         System.out.println("8. 🔁 Porównanie dwóch okresów");
         System.out.println("9. 🧾 Zakupy (podsumowanie)");
-        System.out.println("10. 💰 Food Cost (zakupy kuchni vs sprzedaż kuchni)");
+        System.out.println("10. 💰 Food Cost (zakupy vs sprzedaż)");
         System.out.println("11. 🚪 Wyjście");
     }
     
@@ -372,9 +373,24 @@ public class CommandLineInterface {
         }
     }
 
-    private void calculateFoodCostForKitchen() {
-        System.out.println("\n💰 FOOD COST KUCHNI");
+    private void calculateFoodCost() {
+        System.out.println("\n💰 FOOD COST");
         System.out.println("-".repeat(40));
+
+        System.out.println("\nWybierz magazyn:");
+        System.out.println("1. 🍳 Kuchnia");
+        System.out.println("2. 🥤 Bufet");
+        int warehouseChoice = getIntInput("Wybierz opcję (1-2): ");
+
+        String warehouseName;
+        switch (warehouseChoice) {
+            case 1 -> warehouseName = "Kuchnia";
+            case 2 -> warehouseName = "Bufet";
+            default -> {
+                System.err.println("❌ Nieprawidłowy wybór. Używam Kuchni.");
+                warehouseName = "Kuchnia";
+            }
+        }
 
         System.out.println("\nWybierz sprzedawców:");
         System.out.println("1. Kuchnia Domowa");
@@ -428,8 +444,13 @@ public class CommandLineInterface {
         }
 
         try {
-            var summary = foodCostService.calculateFoodCostForKitchen(from, to, selectedSellers);
-            System.out.println(formatter.formatFoodCostSummary(summary));
+            FoodCostSummary summary;
+            if ("Kuchnia".equals(warehouseName)) {
+                summary = foodCostService.calculateFoodCostForKitchen(from, to, selectedSellers);
+            } else {
+                summary = foodCostService.calculateFoodCostForBuffet(from, to, selectedSellers);
+            }
+            System.out.println(formatter.formatFoodCostSummary(summary, warehouseName));
         } catch (Exception e) {
             System.err.println("❌ Błąd podczas obliczania food cost: " + e.getMessage());
             e.printStackTrace();
