@@ -1,10 +1,12 @@
 package pl.kurs.sogaapplication.service.display;
 
 import org.springframework.stereotype.Component;
+import pl.kurs.sogaapplication.dto.DailyGrossMarginDto;
 import pl.kurs.sogaapplication.dto.DokumentZakupuDto;
 import pl.kurs.sogaapplication.dto.FoodCostSummary;
 import pl.kurs.sogaapplication.dto.KitchenPurchasesSummary;
 import pl.kurs.sogaapplication.dto.RestaurantReportDto;
+import pl.kurs.sogaapplication.dto.SalesItemDetailDto;
 import pl.kurs.sogaapplication.models.ObrotSprzedawcyGodzina;
 import pl.kurs.sogaapplication.models.Pozycja;
 import pl.kurs.sogaapplication.models.Rachunek;
@@ -125,6 +127,216 @@ public class ReportFormatter {
         }
 
         sb.append("=".repeat(80)).append("\n");
+
+        return sb.toString();
+    }
+
+    /**
+     * Formatuje raport marży brutto dziennej.
+     */
+    public String formatDailyGrossMargin(DailyGrossMarginDto.MonthlySummary summary) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("📈 MARŻA BRUTTO DZIENNA\n");
+        sb.append("=".repeat(100)).append("\n");
+        sb.append(String.format("📅 Miesiąc: %s - %s\n",
+                summary.from().format(DATE_FORMAT),
+                summary.to().format(DATE_FORMAT)));
+        sb.append(String.format("🏪 Punkt sprzedaży: %s\n", summary.pointOfSale()));
+        sb.append(String.format("👥 Sprzedawcy: %s\n", summary.sellerIds()));
+        sb.append(String.format("🍳 Food cost kuchni: %s%%\n", NUMBER_FORMAT.format(summary.kitchenFoodCostPercent())));
+        sb.append(String.format("🥤 Food cost bufetu: %s%%\n", NUMBER_FORMAT.format(summary.buffetFoodCostPercent())));
+        sb.append("\n");
+
+        // Tabela dzienna
+        sb.append("📋 SZCZEGÓŁY DZIENNE:\n");
+        sb.append("-".repeat(140)).append("\n");
+        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+                "Data", "Sprzedaż", "Koszty", "Sprzedaż", "Koszty", "Marża", "Status", "Dzień"));
+        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+                "", "kuchnia", "kuchnia", "bufet", "bufet", "brutto", "(+/-)", "tyg."));
+        sb.append("-".repeat(140)).append("\n");
+
+        for (DailyGrossMarginDto dzien : summary.dailyMargins()) {
+            String status = dzien.isProfit() ? "✅ ZYSK" : "❌ STRATA";
+            String dayOfWeek = getPolishDayOfWeek(dzien.date().getDayOfWeek());
+
+            sb.append(String.format("%-12s %15s %15s %15s %15s %15s %-15s %-15s\n",
+                    dzien.date().format(DATE_FORMAT),
+                    CURRENCY_FORMAT.format(dzien.kitchenSales()),
+                    CURRENCY_FORMAT.format(dzien.kitchenCost()),
+                    CURRENCY_FORMAT.format(dzien.buffetSales()),
+                    CURRENCY_FORMAT.format(dzien.buffetCost()),
+                    CURRENCY_FORMAT.format(dzien.grossMargin()),
+                    status,
+                    dayOfWeek));
+        }
+        sb.append("-".repeat(140)).append("\n");
+
+        // Podsumowanie
+        sb.append("\n📊 PODSUMOWANIE:\n");
+        sb.append("-".repeat(50)).append("\n");
+        sb.append(String.format("✅ Dni z zyskiem:  %d\n", summary.profitDays()));
+        sb.append(String.format("❌ Dni ze stratą:  %d\n", summary.lossDays()));
+        sb.append(String.format("📈 Sprzedaż łączna:    %15s\n", CURRENCY_FORMAT.format(summary.totalSales())));
+        sb.append(String.format("💰 Koszty żywności:    %15s\n", CURRENCY_FORMAT.format(summary.totalCost())));
+        sb.append(String.format("💵 Marża brutto łączna: %15s\n", CURRENCY_FORMAT.format(summary.totalGrossMargin())));
+        sb.append(String.format("📊 Średnia marża dzienna: %15s\n", CURRENCY_FORMAT.format(summary.averageDailyMargin())));
+
+        if (summary.bestDay() != null) {
+            sb.append(String.format("🏆 Najlepszy dzień:     %s | Marża: %s\n",
+                    summary.bestDay().date().format(DATE_FORMAT),
+                    CURRENCY_FORMAT.format(summary.bestDay().grossMargin())));
+        }
+
+        if (summary.worstDay() != null) {
+            sb.append(String.format("⚠️  Najgorszy dzień:     %s | Marża: %s\n",
+                    summary.worstDay().date().format(DATE_FORMAT),
+                    CURRENCY_FORMAT.format(summary.worstDay().grossMargin())));
+        }
+
+        sb.append("=".repeat(100)).append("\n");
+
+        return sb.toString();
+    }
+
+    /**
+     * Formatuje szczegółowy raport sprzedaży dziennej z pozycjami.
+     */
+    public String formatDailySalesDetails(List<SalesItemDetailDto> items, java.time.LocalDate date, String pointOfSaleName) {
+        StringBuilder sb = new StringBuilder();
+
+        if (items.isEmpty()) {
+            return String.format("📋 Brak pozycji sprzedanych dla dnia %s w %s.\n", 
+                    date.format(DATE_FORMAT), pointOfSaleName);
+        }
+
+        // Grupuj po kategoriach
+        var byCategory = items.stream()
+                .collect(java.util.stream.Collectors.groupingBy(SalesItemDetailDto::category));
+
+        var kitchenItems = byCategory.getOrDefault("kitchen", java.util.Collections.emptyList());
+        var buffetItems = byCategory.getOrDefault("buffet", java.util.Collections.emptyList());
+        var packagingItems = byCategory.getOrDefault("packaging", java.util.Collections.emptyList());
+        var deliveryItems = byCategory.getOrDefault("delivery", java.util.Collections.emptyList());
+        var undefinedItems = byCategory.getOrDefault("undefined", java.util.Collections.emptyList());
+
+        // Oblicz sumy
+        java.math.BigDecimal kitchenTotal = kitchenItems.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        java.math.BigDecimal buffetTotal = buffetItems.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        java.math.BigDecimal packagingTotal = packagingItems.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        java.math.BigDecimal deliveryTotal = deliveryItems.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        java.math.BigDecimal undefinedTotal = undefinedItems.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        java.math.BigDecimal total = items.stream()
+                .map(SalesItemDetailDto::wartoscNetto)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+
+        // Nagłówek
+        sb.append("🔍 SZCZEGÓŁY SPRZEDAŻY DZIENNEJ\n");
+        sb.append("=".repeat(100)).append("\n");
+        sb.append(String.format("📅 Data: %s\n", date.format(DATE_FORMAT)));
+        sb.append(String.format("🏪 Punkt sprzedaży: %s\n", pointOfSaleName));
+        sb.append("\n");
+
+        // Podsumowanie
+        sb.append("📊 PODSUMOWANIE:\n");
+        sb.append("-".repeat(50)).append("\n");
+        sb.append(String.format("🍳 Kuchnia:    %15s (%d pozycji)\n", 
+                CURRENCY_FORMAT.format(kitchenTotal), kitchenItems.size()));
+        sb.append(String.format("🥤 Bufet:      %15s (%d pozycji)\n", 
+                CURRENCY_FORMAT.format(buffetTotal), buffetItems.size()));
+        sb.append(String.format("📦 Opakowania: %15s (%d pozycji)\n", 
+                CURRENCY_FORMAT.format(packagingTotal), packagingItems.size()));
+        sb.append(String.format("🚚 Dowóz:      %15s (%d pozycji)\n", 
+                CURRENCY_FORMAT.format(deliveryTotal), deliveryItems.size()));
+        if (undefinedTotal.compareTo(java.math.BigDecimal.ZERO) > 0) {
+            sb.append(String.format("⚠️  Niezdefiniowane: %15s (%d pozycji)\n", 
+                    CURRENCY_FORMAT.format(undefinedTotal), undefinedItems.size()));
+        }
+        sb.append(String.format("🧮 Razem:      %15s (%d pozycji)\n", 
+                CURRENCY_FORMAT.format(total), items.size()));
+        sb.append("\n");
+
+        // Szczegóły - BUFET (bo użytkownik pyta o bufet)
+        if (!buffetItems.isEmpty()) {
+            sb.append("🥤 SZCZEGÓŁY - BUFET:\n");
+            sb.append("-".repeat(100)).append("\n");
+            sb.append(String.format("%-8s %-8s %-50s %-10s %-15s %-15s\n",
+                    "ID_RACH", "ID_TW", "Nazwa towaru", "Ilość", "Wartość netto", "Grupa"));
+            sb.append("-".repeat(100)).append("\n");
+
+            for (SalesItemDetailDto item : buffetItems) {
+                sb.append(String.format("%-8s %-8s %-50s %-10s %-15s %-15s\n",
+                        item.rachunekId() != null ? item.rachunekId().toString() : "",
+                        item.towarId() != null ? item.towarId().toString() : "",
+                        item.towarNazwa() != null ? 
+                            (item.towarNazwa().length() > 50 ? item.towarNazwa().substring(0, 50) : item.towarNazwa()) : "",
+                        NUMBER_FORMAT.format(item.ilosc()),
+                        CURRENCY_FORMAT.format(item.wartoscNetto()),
+                        item.towarGrupa() != null ? item.towarGrupa().toString() : ""));
+            }
+            sb.append("-".repeat(100)).append("\n");
+            sb.append(String.format("%-8s %-8s %-50s %-10s %15s\n",
+                    "", "", "SUMA BUFET:", "", CURRENCY_FORMAT.format(buffetTotal)));
+            sb.append("\n");
+        }
+
+        // Szczegóły - NIEZDEFINIOWANE (jeśli są)
+        if (!undefinedItems.isEmpty()) {
+            sb.append("⚠️  SZCZEGÓŁY - NIEZDEFINIOWANE (towary/grupy niepasujące do żadnej kategorii):\n");
+            sb.append("-".repeat(100)).append("\n");
+            sb.append(String.format("%-8s %-8s %-50s %-10s %-15s %-15s\n",
+                    "ID_RACH", "ID_TW", "Nazwa towaru", "Ilość", "Wartość netto", "Grupa/Status"));
+            sb.append("-".repeat(100)).append("\n");
+
+            for (SalesItemDetailDto item : undefinedItems) {
+                String statusInfo = "";
+                if (item.towarId() == null) {
+                    statusInfo = "❌ TOWAR NULL";
+                } else {
+                    statusInfo = item.towarGrupa() != null 
+                        ? String.format("❌ GRUPA %s niezdefiniowana", item.towarGrupa())
+                        : "❌ TOWAR niezdefiniowany";
+                }
+                
+                sb.append(String.format("%-8s %-8s %-50s %-10s %-15s %-40s\n",
+                        item.rachunekId() != null ? item.rachunekId().toString() : "",
+                        item.towarId() != null ? item.towarId().toString() : "NULL",
+                        item.towarNazwa() != null ? 
+                            (item.towarNazwa().length() > 50 ? item.towarNazwa().substring(0, 50) : item.towarNazwa()) : "BRAK NAZWY",
+                        NUMBER_FORMAT.format(item.ilosc()),
+                        CURRENCY_FORMAT.format(item.wartoscNetto()),
+                        statusInfo));
+            }
+            sb.append("-".repeat(100)).append("\n");
+            sb.append(String.format("%-8s %-8s %-50s %-10s %15s\n",
+                    "", "", "SUMA NIEZDEFINIOWANE:", "", CURRENCY_FORMAT.format(undefinedTotal)));
+            sb.append("\n");
+            sb.append("💡 Wskazówka: Dodaj niezdefiniowane towary/grupy do odpowiedniej kategorii w application.properties:\n");
+            sb.append("   - restaurant.kitchen.products (dla towarów kuchni)\n");
+            sb.append("   - restaurant.buffet.products (dla towarów bufetu)\n");
+            sb.append("   - restaurant.buffet.groups (dla grup bufetu)\n");
+            sb.append("   - restaurant.packaging.products (dla opakowań)\n");
+            sb.append("   - restaurant.delivery.products (dla dowozu)\n");
+            sb.append("\n");
+        }
+
+        sb.append("=".repeat(100)).append("\n");
 
         return sb.toString();
     }

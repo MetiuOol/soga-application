@@ -224,6 +224,129 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
                                     @Param("productIds") Collection<Long> productIds,
                                     @Param("sellerIds") Collection<Integer> sellerIds);
 
+    /**
+     * Sumuje sprzedaż bufetu po produktach bufetowych (ID_TW) z korektą zestawów + filtr po sprzedawcach.
+     */
+    @Query(value = """
+  SELECT COALESCE(SUM(
+           CASE WHEN p.ID_TW IN (:productIds) THEN
+                CASE WHEN p.NR_POZ_KOR > 0
+                     THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                     ELSE p.WART_NU
+                END
+           ELSE 0 END
+         ), 0)
+  FROM RACHUNKI r
+  JOIN POZRACH p        ON p.ID_RACH = r.ID_RACH
+  LEFT JOIN POZRACH parent
+         ON parent.ID_RACH = p.ID_RACH
+        AND parent.NR_POZ  = p.NR_POZ
+        AND parent.NR_POZ_KOR = 0
+  WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
+    AND r.ID_UZ IN (:sellerIds)
+  """, nativeQuery = true)
+    BigDecimal sumaBufetByProductsBySellers(@Param("from") LocalDateTime from,
+                                           @Param("to")   LocalDateTime to,
+                                           @Param("productIds") Collection<Long> productIds,
+                                           @Param("sellerIds") Collection<Integer> sellerIds);
+
+    /**
+     * Sumuje sprzedaż bufetu po grupach bufetowych (ID_GR) z korektą zestawów (bez filtrowania po sprzedawcach).
+     * Wyklucza produkty już w liście produktów bufetowych, żeby uniknąć podwójnego liczenia.
+     */
+    @Query(value = """
+  SELECT COALESCE(SUM(
+           CASE WHEN t.ID_GR IN (:groupIds) AND (:excludedProductIdsCount = 0 OR p.ID_TW NOT IN (:excludedProductIds)) THEN
+                CASE WHEN p.NR_POZ_KOR > 0
+                     THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                     ELSE p.WART_NU
+                END
+           ELSE 0 END
+         ), 0)
+  FROM RACHUNKI r
+  JOIN POZRACH p        ON p.ID_RACH = r.ID_RACH
+  LEFT JOIN TOWARY t    ON t.ID_TW = p.ID_TW
+  LEFT JOIN POZRACH parent
+         ON parent.ID_RACH = p.ID_RACH
+        AND parent.NR_POZ  = p.NR_POZ
+        AND parent.NR_POZ_KOR = 0
+  WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
+    AND t.ID_GR IN (:groupIds)
+  """, nativeQuery = true)
+    BigDecimal sumaBufetByGroups(@Param("from") LocalDateTime from,
+                                 @Param("to")   LocalDateTime to,
+                                 @Param("groupIds") Collection<Integer> groupIds,
+                                 @Param("excludedProductIds") Collection<Long> excludedProductIds,
+                                 @Param("excludedProductIdsCount") int excludedProductIdsCount);
+
+    /**
+     * Sumuje sprzedaż bufetu po grupach bufetowych (ID_GR) z korektą zestawów + filtr po sprzedawcach.
+     * Wyklucza produkty już w liście produktów bufetowych, żeby uniknąć podwójnego liczenia.
+     */
+    @Query(value = """
+  SELECT COALESCE(SUM(
+           CASE WHEN t.ID_GR IN (:groupIds) AND (:excludedProductIdsCount = 0 OR p.ID_TW NOT IN (:excludedProductIds)) THEN
+                CASE WHEN p.NR_POZ_KOR > 0
+                     THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                     ELSE p.WART_NU
+                END
+           ELSE 0 END
+         ), 0)
+  FROM RACHUNKI r
+  JOIN POZRACH p        ON p.ID_RACH = r.ID_RACH
+  LEFT JOIN TOWARY t    ON t.ID_TW = p.ID_TW
+  LEFT JOIN POZRACH parent
+         ON parent.ID_RACH = p.ID_RACH
+        AND parent.NR_POZ  = p.NR_POZ
+        AND parent.NR_POZ_KOR = 0
+  WHERE r.DATA_ROZ >= :from AND r.DATA_ROZ < :to
+    AND r.ID_UZ IN (:sellerIds)
+    AND t.ID_GR IN (:groupIds)
+  """, nativeQuery = true)
+    BigDecimal sumaBufetByGroupsBySellers(@Param("from") LocalDateTime from,
+                                    @Param("to")   LocalDateTime to,
+                                    @Param("groupIds") Collection<Integer> groupIds,
+                                         @Param("sellerIds") Collection<Integer> sellerIds,
+                                         @Param("excludedProductIds") Collection<Long> excludedProductIds,
+                                         @Param("excludedProductIdsCount") int excludedProductIdsCount);
+
+    /**
+     * Pobiera szczegółową listę pozycji sprzedanych dla konkretnej daty i sprzedawców.
+     * Zwraca pozycje z rachunków wraz z informacją o kategorii (kuchnia/bufet/opakowania/dowóz).
+     */
+    @Query(value = """
+        SELECT 
+            r.ID_RACH as rachunekId,
+            u.NAZWA_UZ as sellerName,
+            u.ID_UZ as sellerId,
+            t.ID_TW as towarId,
+            t.NAZWA_TW as towarNazwa,
+            t.ID_GR as towarGrupa,
+            CASE 
+                WHEN p.NR_POZ_KOR > 0 THEN COALESCE(parent.ILOSC, p.ILOSC)
+                ELSE p.ILOSC
+            END as ilosc,
+            CASE 
+                WHEN p.NR_POZ_KOR > 0 THEN p.WART_JN * COALESCE(parent.ILOSC, p.ILOSC)
+                ELSE p.WART_NU
+            END as wartoscNetto
+        FROM POZRACH p
+        JOIN RACHUNKI r ON r.ID_RACH = p.ID_RACH
+        JOIN UZYTKOWNICY u ON u.ID_UZ = r.ID_UZ
+        LEFT JOIN TOWARY t ON t.ID_TW = p.ID_TW
+        LEFT JOIN POZRACH parent
+               ON parent.ID_RACH = p.ID_RACH
+              AND parent.NR_POZ  = p.NR_POZ
+              AND parent.NR_POZ_KOR = 0
+        WHERE r.DATA_ROZ >= :from
+          AND r.DATA_ROZ < :to
+          AND r.ID_UZ IN (:sellerIds)
+        ORDER BY r.ID_RACH, p.NR_POZ
+        """, nativeQuery = true)
+    List<Object[]> findSalesItemsByDateAndSellers(@Param("from") LocalDateTime from,
+                                                    @Param("to") LocalDateTime to,
+                                    @Param("sellerIds") Collection<Integer> sellerIds);
+
     // Diagnostyczne zapytanie do sprawdzania grup towarów używanych przez Kuchnię Domową
     @Query(value = """
             SELECT

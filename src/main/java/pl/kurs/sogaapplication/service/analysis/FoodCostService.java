@@ -4,19 +4,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pl.kurs.sogaapplication.dto.DailyGrossMarginDto;
 import pl.kurs.sogaapplication.dto.DokumentZakupuDto;
 import pl.kurs.sogaapplication.dto.FoodCostSummary;
 import pl.kurs.sogaapplication.dto.KitchenPurchasesSummary;
+import pl.kurs.sogaapplication.models.DzienPodzial;
 import pl.kurs.sogaapplication.repositories.DokumentJpaRepository;
 import pl.kurs.sogaapplication.repositories.RachunekJpaRepository;
+import pl.kurs.sogaapplication.service.analysis.SalesAnalysisService;
 import pl.kurs.sogaapplication.service.config.RestaurantConfigService;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.stream.Collectors;
 import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -27,13 +33,16 @@ public class FoodCostService {
     private final DokumentJpaRepository dokumentRepository;
     private final RachunekJpaRepository rachunekRepository;
     private final RestaurantConfigService configService;
+    private final SalesAnalysisService salesAnalysisService;
 
     public FoodCostService(DokumentJpaRepository dokumentRepository,
                            RachunekJpaRepository rachunekRepository,
-                           RestaurantConfigService configService) {
+                           RestaurantConfigService configService,
+                           SalesAnalysisService salesAnalysisService) {
         this.dokumentRepository = dokumentRepository;
         this.rachunekRepository = rachunekRepository;
         this.configService = configService;
+        this.salesAnalysisService = salesAnalysisService;
     }
 
     /**
@@ -416,6 +425,125 @@ public class FoodCostService {
                 purchasesSummary.purchasesPzNet(),
                 purchasesSummary.purchasesTotalNet(),
                 foodCostPercent
+        );
+    }
+
+    /**
+     * Oblicza marżę brutto dzienną dla wybranego miesiąca.
+     * Dla każdego dnia oblicza sprzedaż, koszty żywności (na podstawie food cost % z miesiąca) i marżę brutto.
+     * @param year Rok
+     * @param month Miesiąc (1-12)
+     * @param sellerIds Sprzedawcy dla których obliczamy marżę dzienną
+     * @param foodCostSellerIds Sprzedawcy dla których obliczamy food cost % (zwykle wszyscy)
+     * @param pointOfSaleName Nazwa punktu sprzedaży
+     */
+    @Transactional(readOnly = true)
+    public DailyGrossMarginDto.MonthlySummary calculateDailyGrossMargin(int year, int month, 
+                                                                        Collection<Integer> sellerIds,
+                                                                        Collection<Integer> foodCostSellerIds,
+                                                                        String pointOfSaleName) {
+        LocalDate from = LocalDate.of(year, month, 1);
+        LocalDate to = from.with(TemporalAdjusters.lastDayOfMonth());
+
+        // Oblicz food cost % dla kuchni i bufetu z całego miesiąca (dla foodCostSellerIds)
+        FoodCostSummary kitchenFoodCost = calculateFoodCostForKitchen(from, to, foodCostSellerIds);
+        FoodCostSummary buffetFoodCost = calculateFoodCostForBuffet(from, to, foodCostSellerIds);
+
+        BigDecimal kitchenFoodCostPercent = kitchenFoodCost.foodCostPercent()
+                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+        BigDecimal buffetFoodCostPercent = buffetFoodCost.foodCostPercent()
+                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+
+        // Pobierz dzienną sprzedaż - użyjmy publicznej metody analyzeDaily
+        // analyzeDaily przyjmuje pierwszy dzień miesiąca i sellerIds, zwraca listę dla całego miesiąca
+        List<DzienPodzial> dailySales = salesAnalysisService.analyzeDailySales(from, sellerIds);
+
+        List<DailyGrossMarginDto> dailyMargins = new ArrayList<>();
+
+        for (DzienPodzial dzien : dailySales) {
+            BigDecimal kitchenSales = dzien.kuchnia();
+            BigDecimal buffetSales = dzien.bufet();
+            BigDecimal packagingSales = dzien.opakowania();
+            BigDecimal deliverySales = dzien.dowoz();
+            BigDecimal totalSales = dzien.suma();
+
+            // Oblicz koszty żywności (sprzedaż × food cost %)
+            BigDecimal kitchenCost = kitchenSales.multiply(kitchenFoodCostPercent)
+                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal buffetCost = buffetSales.multiply(buffetFoodCostPercent)
+                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal totalCost = kitchenCost.add(buffetCost);
+
+            // Marża brutto = sprzedaż - koszty żywności
+            // Opakowania i dowóz mają 100% marży (brak kosztów żywności)
+            BigDecimal grossMargin = totalSales.subtract(totalCost);
+
+            dailyMargins.add(new DailyGrossMarginDto(
+                    dzien.dzien(),
+                    totalSales,
+                    kitchenSales,
+                    buffetSales,
+                    packagingSales,
+                    deliverySales,
+                    kitchenCost,
+                    buffetCost,
+                    totalCost,
+                    grossMargin,
+                    grossMargin.compareTo(BigDecimal.ZERO) > 0
+            ));
+        }
+
+        // Podsumowanie - wyklucz dni z zerową sprzedażą
+        List<DailyGrossMarginDto> daysWithSales = dailyMargins.stream()
+                .filter(day -> day.totalSales().compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toList());
+
+        long profitDays = daysWithSales.stream().filter(DailyGrossMarginDto::isProfit).count();
+        long lossDays = daysWithSales.size() - profitDays;
+
+        BigDecimal totalSales = daysWithSales.stream()
+                .map(DailyGrossMarginDto::totalSales)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalCost = daysWithSales.stream()
+                .map(DailyGrossMarginDto::totalCost)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalGrossMargin = daysWithSales.stream()
+                .map(DailyGrossMarginDto::grossMargin)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal averageDailyMargin = daysWithSales.isEmpty()
+                ? BigDecimal.ZERO
+                : totalGrossMargin.divide(BigDecimal.valueOf(daysWithSales.size()), 2, RoundingMode.HALF_UP);
+
+        DailyGrossMarginDto bestDay = daysWithSales.stream()
+                .max(Comparator.comparing(DailyGrossMarginDto::grossMargin))
+                .orElse(null);
+
+        DailyGrossMarginDto worstDay = daysWithSales.stream()
+                .min(Comparator.comparing(DailyGrossMarginDto::grossMargin))
+                .orElse(null);
+
+        log.debug("Marża brutto dzienna {} {} | sprzedawcy {} | dni z zyskiem: {} | dni ze stratą: {} | marża łączna: {}",
+                pointOfSaleName, from, sellerIds, profitDays, lossDays, totalGrossMargin);
+
+        return new DailyGrossMarginDto.MonthlySummary(
+                from,
+                to,
+                pointOfSaleName,
+                List.copyOf(sellerIds),
+                kitchenFoodCost.foodCostPercent(),
+                buffetFoodCost.foodCostPercent(),
+                dailyMargins,
+                profitDays,
+                lossDays,
+                totalSales,
+                totalCost,
+                totalGrossMargin,
+                averageDailyMargin,
+                bestDay,
+                worstDay
         );
     }
 }

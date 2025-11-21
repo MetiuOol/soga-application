@@ -64,7 +64,7 @@ public class CommandLineInterface {
         
         while (true) {
             showMainMenu();
-            int choice = getIntInput("Wybierz opcję (1-11): ");
+            int choice = getIntInput("Wybierz opcję (1-13): ");
             
             switch (choice) {
                 case 1 -> generateSalesReport();
@@ -77,7 +77,9 @@ public class CommandLineInterface {
                 case 8 -> compareSalesReports();
                 case 9 -> calculateKitchenPurchases();
                 case 10 -> calculateFoodCost();
-                case 11 -> {
+                case 11 -> calculateDailyGrossMargin();
+                case 12 -> showDailySalesDetails();
+                case 13 -> {
                     System.out.println("👋 Dziękujemy za korzystanie z systemu!");
                     return;
                 }
@@ -102,7 +104,9 @@ public class CommandLineInterface {
         System.out.println("8. 🔁 Porównanie dwóch okresów");
         System.out.println("9. 🧾 Zakupy (podsumowanie)");
         System.out.println("10. 💰 Food Cost (zakupy vs sprzedaż)");
-        System.out.println("11. 🚪 Wyjście");
+        System.out.println("11. 📈 Marża brutto dzienna");
+        System.out.println("12. 🔍 Szczegóły sprzedaży dziennej");
+        System.out.println("13. 🚪 Wyjście");
     }
     
     private void generateSalesReport() {
@@ -392,37 +396,9 @@ public class CommandLineInterface {
             }
         }
 
-        System.out.println("\nWybierz sprzedawców:");
-        System.out.println("1. Kuchnia Domowa");
-        System.out.println("2. Ratuszowa");
-        System.out.println("3. Wszyscy");
-        System.out.println("4. Własny wybór");
-        int sellerChoice = getIntInput("Wybierz opcję (1-4): ");
-
-        List<Integer> selectedSellers;
-        switch (sellerChoice) {
-            case 1 -> {
-                var kd = pointOfSaleService.getPointOfSale("KD");
-                selectedSellers = kd.map(PointOfSale::getSellerIds).orElse(configService.getDefaultSellers());
-            }
-            case 2 -> {
-                var ratuszowa = pointOfSaleService.getPointOfSale("Ratuszowa");
-                selectedSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
-            }
-            case 3 -> selectedSellers = configService.getAllSellers();
-            case 4 -> {
-                System.out.print("Podaj ID sprzedawców (oddzielone przecinkami, np. 11,12,13): ");
-                String input = scanner.nextLine().trim();
-                selectedSellers = Arrays.stream(input.split(","))
-                        .map(String::trim)
-                        .map(Integer::parseInt)
-                        .toList();
-            }
-            default -> {
-                System.err.println("❌ Nieprawidłowy wybór. Używam domyślnych sprzedawców.");
-                selectedSellers = configService.getDefaultSellers();
-            }
-        }
+        // Food cost zawsze liczony dla wszystkich sprzedawców (magazyny są wspólne)
+        List<Integer> selectedSellers = configService.getAllSellers();
+        System.out.println("\n✅ Food cost będzie obliczany dla wszystkich sprzedawców: " + selectedSellers);
 
         System.out.println("\nWybierz okres:");
         System.out.println("1. Cały miesiąc");
@@ -453,6 +429,61 @@ public class CommandLineInterface {
             System.out.println(formatter.formatFoodCostSummary(summary, warehouseName));
         } catch (Exception e) {
             System.err.println("❌ Błąd podczas obliczania food cost: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private void calculateDailyGrossMargin() {
+        System.out.println("\n📈 MARŻA BRUTTO DZIENNA");
+        System.out.println("-".repeat(40));
+
+        System.out.println("\nWybierz punkt sprzedaży dla marży dziennej:");
+        System.out.println("1. 🏠 Kuchnia Domowa");
+        System.out.println("2. 🏛️  Ratuszowa");
+        System.out.println("3. Wszyscy");
+        System.out.println("4. Własny wybór");
+        int pointOfSaleChoice = getIntInput("Wybierz opcję (1-4): ");
+
+        String pointOfSaleName;
+        List<Integer> selectedSellers;
+        switch (pointOfSaleChoice) {
+            case 1 -> {
+                pointOfSaleName = "Kuchnia Domowa";
+                var kd = pointOfSaleService.getPointOfSale("KD");
+                selectedSellers = kd.map(PointOfSale::getSellerIds).orElse(configService.getDefaultSellers());
+            }
+            case 2 -> {
+                pointOfSaleName = "Ratuszowa";
+                var ratuszowa = pointOfSaleService.getPointOfSale("RATUSZOWA");
+                selectedSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
+            }
+            case 3 -> {
+                pointOfSaleName = "Wszyscy";
+                selectedSellers = configService.getAllSellers();
+            }
+            case 4 -> {
+                pointOfSaleName = "Własny wybór";
+                selectedSellers = getCustomSellerIds();
+            }
+            default -> {
+                System.err.println("❌ Nieprawidłowy wybór. Używam Kuchni Domowej.");
+                pointOfSaleName = "Kuchnia Domowa";
+                selectedSellers = configService.getDefaultSellers();
+            }
+        }
+
+        // Food cost % zawsze liczony dla wszystkich sprzedawców
+        List<Integer> foodCostSellerIds = configService.getAllSellers();
+        System.out.println("\n✅ Food cost % będzie obliczany dla wszystkich sprzedawców: " + foodCostSellerIds);
+
+        int year = getIntInput("\nPodaj rok (np. 2025): ");
+        int month = getIntInput("Podaj miesiąc (1-12): ");
+
+        try {
+            var summary = foodCostService.calculateDailyGrossMargin(year, month, selectedSellers, foodCostSellerIds, pointOfSaleName);
+            System.out.println(formatter.formatDailyGrossMargin(summary));
+        } catch (Exception e) {
+            System.err.println("❌ Błąd podczas obliczania marży brutto dziennej: " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -541,6 +572,46 @@ public class CommandLineInterface {
             
         } catch (Exception e) {
             System.out.println("❌ Błąd podczas walidacji: " + e.getMessage());
+        }
+    }
+
+    private void showDailySalesDetails() {
+        System.out.println("\n🔍 SZCZEGÓŁY SPRZEDAŻY DZIENNEJ");
+        System.out.println("-".repeat(40));
+
+        System.out.println("\nWybierz punkt sprzedaży:");
+        System.out.println("1. 🏠 Kuchnia Domowa");
+        System.out.println("2. 🏛️  Ratuszowa");
+        int pointOfSaleChoice = getIntInput("Wybierz opcję (1-2): ");
+
+        List<Integer> selectedSellers;
+        String pointOfSaleName;
+        switch (pointOfSaleChoice) {
+            case 1 -> {
+                pointOfSaleName = "Kuchnia Domowa";
+                var kd = pointOfSaleService.getPointOfSale("KD");
+                selectedSellers = kd.map(PointOfSale::getSellerIds).orElse(configService.getDefaultSellers());
+            }
+            case 2 -> {
+                pointOfSaleName = "Ratuszowa";
+                var ratuszowa = pointOfSaleService.getPointOfSale("RATUSZOWA");
+                selectedSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
+            }
+            default -> {
+                System.err.println("❌ Nieprawidłowy wybór. Używam Ratuszowej.");
+                pointOfSaleName = "Ratuszowa";
+                selectedSellers = configService.getAllSellers();
+            }
+        }
+
+        LocalDate date = getDateInput("Data (YYYY-MM-DD): ");
+
+        try {
+            var details = salesAnalysisService.getDailySalesDetails(date, selectedSellers, pointOfSaleName);
+            System.out.println(formatter.formatDailySalesDetails(details, date, pointOfSaleName));
+        } catch (Exception e) {
+            System.err.println("❌ Błąd podczas pobierania szczegółów sprzedaży: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
