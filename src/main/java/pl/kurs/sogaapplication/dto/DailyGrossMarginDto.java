@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * DTO dla raportu marży brutto dziennej.
- * Pokazuje dla każdego dnia sprzedaż, koszty żywności i marżę brutto.
+ * Pokazuje dla każdego dnia sprzedaż, koszty żywności, koszty ogólne i marżę brutto/netto.
  */
 public record DailyGrossMarginDto(
         LocalDate date,
@@ -17,9 +17,11 @@ public record DailyGrossMarginDto(
         BigDecimal deliverySales,
         BigDecimal kitchenCost,
         BigDecimal buffetCost,
-        BigDecimal totalCost,
-        BigDecimal grossMargin,
-        boolean isProfit // true jeśli marża > 0
+        BigDecimal totalCost, // koszty żywności (kuchnia + bufet)
+        BigDecimal costs, // koszty ogólne (magazyn koszty) - średnia dzienna kumulatywna od początku roku
+        BigDecimal grossMargin, // marża brutto = sprzedaż - koszty żywności
+        BigDecimal netMargin, // marża netto = marża brutto - koszty ogólne
+        boolean isProfit // true jeśli marża netto > 0
 ) {
     
     /**
@@ -36,9 +38,11 @@ public record DailyGrossMarginDto(
             long profitDays,
             long lossDays,
             BigDecimal totalSales,
-            BigDecimal totalCost,
-            BigDecimal totalGrossMargin,
-            BigDecimal averageDailyMargin,
+            BigDecimal totalCost, // koszty żywności łącznie
+            BigDecimal totalCosts, // koszty ogólne łącznie
+            BigDecimal totalGrossMargin, // marża brutto łączna
+            BigDecimal totalNetMargin, // marża netto łączna
+            BigDecimal averageDailyMargin, // średnia marża netto dzienna
             DailyGrossMarginDto bestDay,
             DailyGrossMarginDto worstDay
     ) {}

@@ -1,6 +1,7 @@
 package pl.kurs.sogaapplication.service.cli;
 
 import org.springframework.stereotype.Component;
+import pl.kurs.sogaapplication.dto.DailyGrossMarginDto;
 import pl.kurs.sogaapplication.dto.FoodCostSummary;
 import pl.kurs.sogaapplication.dto.RestaurantReportDto;
 import pl.kurs.sogaapplication.models.ObrotSprzedawcyGodzina;
@@ -313,11 +314,13 @@ public class CommandLineInterface {
         System.out.println("\nWybierz magazyn:");
         var kitchenWarehouses = configService.getKitchenWarehouses();
         var buffetWarehouses = configService.getBuffetWarehouses();
+        var costsWarehouses = configService.getCostWarehouses();
         
         System.out.println("1. 🍳 Kuchnia (magazyny: " + kitchenWarehouses + ")");
         System.out.println("2. 🥤 Bufet (magazyny: " + buffetWarehouses + ")");
+        System.out.println("3. 💰 Koszty (magazyny: " + costsWarehouses + ")");
         
-        int warehouseChoice = getIntInput("Wybierz opcję (1-2): ");
+        int warehouseChoice = getIntInput("Wybierz opcję (1-3): ");
         
         List<Integer> selectedWarehouses;
         String warehouseName;
@@ -338,6 +341,14 @@ public class CommandLineInterface {
                 }
                 selectedWarehouses = buffetWarehouses;
                 warehouseName = "Bufet";
+                break;
+            case 3:
+                if (costsWarehouses.isEmpty()) {
+                    System.err.println("❌ Brak skonfigurowanych magazynów kosztów!");
+                    return;
+                }
+                selectedWarehouses = costsWarehouses;
+                warehouseName = "Koszty";
                 break;
             default:
                 System.err.println("❌ Nieprawidłowy wybór. Używam Kuchni.");
@@ -458,8 +469,8 @@ public class CommandLineInterface {
                 selectedSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
             }
             case 3 -> {
-                pointOfSaleName = "Wszyscy";
-                selectedSellers = configService.getAllSellers();
+                pointOfSaleName = "Wszyscy (KD + Ratuszowa)";
+                selectedSellers = configService.getAllSellers(); // Używamy do identyfikacji, ale będziemy sumować
             }
             case 4 -> {
                 pointOfSaleName = "Własny wybór";
@@ -477,10 +488,48 @@ public class CommandLineInterface {
         System.out.println("\n✅ Food cost % będzie obliczany dla wszystkich sprzedawców: " + foodCostSellerIds);
 
         int year = getIntInput("\nPodaj rok (np. 2025): ");
+        
+        // Wyświetl informację o ostatnim dniu sprzedaży w roku
+        try {
+            var lastSalesDate = foodCostService.getLastSalesDateInYear(year);
+            if (lastSalesDate != null) {
+                java.time.LocalDate yearStart = java.time.LocalDate.of(year, 1, 1);
+                long daysCount = java.time.temporal.ChronoUnit.DAYS.between(yearStart, lastSalesDate) + 1;
+                System.out.println("📅 Ostatni dzień ze sprzedażą w roku " + year + ": " + 
+                        lastSalesDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")));
+                System.out.println("📊 Liczba dni od 01.01." + year + " do " + 
+                        lastSalesDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + 
+                        " (włącznie): " + daysCount + " dni");
+            } else {
+                System.out.println("⚠️  Brak sprzedaży w roku " + year);
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️  Nie można sprawdzić ostatniego dnia sprzedaży: " + e.getMessage());
+        }
+        
         int month = getIntInput("Podaj miesiąc (1-12): ");
 
         try {
-            var summary = foodCostService.calculateDailyGrossMargin(year, month, selectedSellers, foodCostSellerIds, pointOfSaleName);
+            DailyGrossMarginDto.MonthlySummary summary;
+            
+            // Jeśli wybrano "Wszyscy", sumuj dane z KD i Ratuszowej
+            if (pointOfSaleChoice == 3) {
+                var kd = pointOfSaleService.getPointOfSale("KD");
+                var ratuszowa = pointOfSaleService.getPointOfSale("RATUSZOWA");
+                
+                List<Integer> kdSellers = kd.map(PointOfSale::getSellerIds).orElse(configService.getDefaultSellers());
+                List<Integer> ratuszowaSellers = ratuszowa.map(PointOfSale::getSellerIds).orElse(configService.getAllSellers());
+                
+                // Oblicz osobno dla KD i Ratuszowej
+                var kdSummary = foodCostService.calculateDailyGrossMargin(year, month, kdSellers, foodCostSellerIds, "Kuchnia Domowa");
+                var ratuszowaSummary = foodCostService.calculateDailyGrossMargin(year, month, ratuszowaSellers, foodCostSellerIds, "Ratuszowa");
+                
+                // Sumuj dane z obu punktów
+                summary = foodCostService.combineDailyGrossMarginSummaries(kdSummary, ratuszowaSummary, pointOfSaleName);
+            } else {
+                summary = foodCostService.calculateDailyGrossMargin(year, month, selectedSellers, foodCostSellerIds, pointOfSaleName);
+            }
+            
             System.out.println(formatter.formatDailyGrossMargin(summary));
         } catch (Exception e) {
             System.err.println("❌ Błąd podczas obliczania marży brutto dziennej: " + e.getMessage());

@@ -91,14 +91,19 @@ public class ReportFormatter {
         sb.append(String.format("🧾 Zakupy netto FZ:            %15s\n", CURRENCY_FORMAT.format(summary.purchasesFzNet())));
         sb.append(String.format("📄 Zakupy netto PZ (bez FZ):   %15s\n", CURRENCY_FORMAT.format(summary.purchasesPzNet())));
         sb.append(String.format("📝 Zakupy netto KFZ:           %15s\n", CURRENCY_FORMAT.format(summary.purchasesKfzNet())));
-        String mmpLabel = "Kuchnia".equals(summary.warehouseName()) 
-                ? "MMP (bufet→kuchnia)" 
-                : "MMP (kuchnia→bufet)";
-        String mmLabel = "Kuchnia".equals(summary.warehouseName()) 
-                ? "MM (kuchnia→bufet)" 
-                : "MM (bufet→kuchnia)";
-        sb.append(String.format("🔄 Zakupy netto MMP (%s): %15s\n", mmpLabel, CURRENCY_FORMAT.format(summary.purchasesMmpNet())));
-        sb.append(String.format("⬅️  Przeniesienia MM (%s): %15s\n", mmLabel, CURRENCY_FORMAT.format(summary.purchasesMmNet())));
+        
+        // MMP i MM tylko dla Kuchni i Bufetu (nie dla Kosztów)
+        if (!"Koszty".equals(summary.warehouseName())) {
+            String mmpLabel = "Kuchnia".equals(summary.warehouseName()) 
+                    ? "MMP (bufet→kuchnia)" 
+                    : "MMP (kuchnia→bufet)";
+            String mmLabel = "Kuchnia".equals(summary.warehouseName()) 
+                    ? "MM (kuchnia→bufet)" 
+                    : "MM (bufet→kuchnia)";
+            sb.append(String.format("🔄 Zakupy netto MMP (%s): %15s\n", mmpLabel, CURRENCY_FORMAT.format(summary.purchasesMmpNet())));
+            sb.append(String.format("⬅️  Przeniesienia MM (%s): %15s\n", mmLabel, CURRENCY_FORMAT.format(summary.purchasesMmNet())));
+        }
+        
         sb.append(String.format("🧮 Zakupy netto łącznie:       %15s\n", CURRENCY_FORMAT.format(summary.purchasesTotalNet())));
         sb.append("\n");
 
@@ -137,8 +142,8 @@ public class ReportFormatter {
     public String formatDailyGrossMargin(DailyGrossMarginDto.MonthlySummary summary) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("📈 MARŻA BRUTTO DZIENNA\n");
-        sb.append("=".repeat(100)).append("\n");
+        sb.append("📈 MARŻA BRUTTO/NETTO DZIENNA\n");
+        sb.append("=".repeat(160)).append("\n");
         sb.append(String.format("📅 Miesiąc: %s - %s\n",
                 summary.from().format(DATE_FORMAT),
                 summary.to().format(DATE_FORMAT)));
@@ -150,52 +155,56 @@ public class ReportFormatter {
 
         // Tabela dzienna
         sb.append("📋 SZCZEGÓŁY DZIENNE:\n");
-        sb.append("-".repeat(140)).append("\n");
-        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
-                "Data", "Sprzedaż", "Koszty", "Sprzedaż", "Koszty", "Marża", "Status", "Dzień"));
-        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
-                "", "kuchnia", "kuchnia", "bufet", "bufet", "brutto", "(+/-)", "tyg."));
-        sb.append("-".repeat(140)).append("\n");
+        sb.append("-".repeat(160)).append("\n");
+        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+                "Data", "Sprzedaż", "Koszty", "Sprzedaż", "Koszty", "Koszty", "Marża", "Marża", "Status", "Dzień"));
+        sb.append(String.format("%-12s %-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s %-15s\n",
+                "", "kuchnia", "kuchnia", "bufet", "bufet", "ogólne", "brutto", "netto", "(+/-)", "tyg."));
+        sb.append("-".repeat(160)).append("\n");
 
         for (DailyGrossMarginDto dzien : summary.dailyMargins()) {
             String status = dzien.isProfit() ? "✅ ZYSK" : "❌ STRATA";
             String dayOfWeek = getPolishDayOfWeek(dzien.date().getDayOfWeek());
 
-            sb.append(String.format("%-12s %15s %15s %15s %15s %15s %-15s %-15s\n",
+            sb.append(String.format("%-12s %15s %15s %15s %15s %15s %15s %15s %-15s %-15s\n",
                     dzien.date().format(DATE_FORMAT),
                     CURRENCY_FORMAT.format(dzien.kitchenSales()),
                     CURRENCY_FORMAT.format(dzien.kitchenCost()),
                     CURRENCY_FORMAT.format(dzien.buffetSales()),
                     CURRENCY_FORMAT.format(dzien.buffetCost()),
+                    CURRENCY_FORMAT.format(dzien.costs()),
                     CURRENCY_FORMAT.format(dzien.grossMargin()),
+                    CURRENCY_FORMAT.format(dzien.netMargin()),
                     status,
                     dayOfWeek));
         }
-        sb.append("-".repeat(140)).append("\n");
+        sb.append("-".repeat(160)).append("\n");
 
         // Podsumowanie
         sb.append("\n📊 PODSUMOWANIE:\n");
-        sb.append("-".repeat(50)).append("\n");
+        sb.append("-".repeat(60)).append("\n");
         sb.append(String.format("✅ Dni z zyskiem:  %d\n", summary.profitDays()));
         sb.append(String.format("❌ Dni ze stratą:  %d\n", summary.lossDays()));
-        sb.append(String.format("📈 Sprzedaż łączna:    %15s\n", CURRENCY_FORMAT.format(summary.totalSales())));
-        sb.append(String.format("💰 Koszty żywności:    %15s\n", CURRENCY_FORMAT.format(summary.totalCost())));
-        sb.append(String.format("💵 Marża brutto łączna: %15s\n", CURRENCY_FORMAT.format(summary.totalGrossMargin())));
-        sb.append(String.format("📊 Średnia marża dzienna: %15s\n", CURRENCY_FORMAT.format(summary.averageDailyMargin())));
+        sb.append(String.format("📈 Sprzedaż łączna:        %15s\n", CURRENCY_FORMAT.format(summary.totalSales())));
+        sb.append(String.format("💰 Koszty żywności:         %15s\n", CURRENCY_FORMAT.format(summary.totalCost())));
+        sb.append(String.format("💼 Koszty ogólne:           %15s\n", CURRENCY_FORMAT.format(summary.totalCosts())));
+        sb.append(String.format("💵 Marża brutto łączna:     %15s\n", CURRENCY_FORMAT.format(summary.totalGrossMargin())));
+        sb.append(String.format("💵 Marża netto łączna:     %15s\n", CURRENCY_FORMAT.format(summary.totalNetMargin())));
+        sb.append(String.format("📊 Średnia marża netto dzienna: %15s\n", CURRENCY_FORMAT.format(summary.averageDailyMargin())));
 
         if (summary.bestDay() != null) {
-            sb.append(String.format("🏆 Najlepszy dzień:     %s | Marża: %s\n",
+            sb.append(String.format("🏆 Najlepszy dzień:     %s | Marża netto: %s\n",
                     summary.bestDay().date().format(DATE_FORMAT),
-                    CURRENCY_FORMAT.format(summary.bestDay().grossMargin())));
+                    CURRENCY_FORMAT.format(summary.bestDay().netMargin())));
         }
 
         if (summary.worstDay() != null) {
-            sb.append(String.format("⚠️  Najgorszy dzień:     %s | Marża: %s\n",
+            sb.append(String.format("⚠️  Najgorszy dzień:     %s | Marża netto: %s\n",
                     summary.worstDay().date().format(DATE_FORMAT),
-                    CURRENCY_FORMAT.format(summary.worstDay().grossMargin())));
+                    CURRENCY_FORMAT.format(summary.worstDay().netMargin())));
         }
 
-        sb.append("=".repeat(100)).append("\n");
+        sb.append("=".repeat(160)).append("\n");
 
         return sb.toString();
     }

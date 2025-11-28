@@ -135,6 +135,60 @@ public interface RachunekJpaRepository extends JpaRepository<Rachunek, Long> {
   """, nativeQuery = true)
     BigDecimal sumaRazem(@Param("from") LocalDateTime from,
                          @Param("to")   LocalDateTime to);
+    
+    /**
+     * Znajduje ostatni dzień ze sprzedażą w danym roku (dla wszystkich sprzedawców).
+     * Zwraca datę jako LocalDate lub null jeśli brak sprzedaży.
+     */
+    @Query(value = """
+  SELECT MAX(CAST(r.DATA_ROZ AS DATE))
+  FROM RACHUNKI r
+  WHERE EXTRACT(YEAR FROM r.DATA_ROZ) = :year
+    AND r.WART_NU > 0
+  """, nativeQuery = true)
+    java.sql.Date findLastSalesDateInYear(@Param("year") int year);
+    
+    /**
+     * Zlicza liczbę unikalnych dni ze sprzedażą w danym roku (dla wszystkich sprzedawców).
+     * Zwraca liczbę dni, które miały sprzedaż > 0.
+     */
+    @Query(value = """
+  SELECT COUNT(DISTINCT CAST(r.DATA_ROZ AS DATE))
+  FROM RACHUNKI r
+  WHERE EXTRACT(YEAR FROM r.DATA_ROZ) = :year
+    AND r.WART_NU > 0
+  """, nativeQuery = true)
+    long countDaysWithSalesInYear(@Param("year") int year);
+    
+    /**
+     * Zlicza liczbę unikalnych dni ze sprzedażą w zadanym zakresie dat (dla wszystkich sprzedawców).
+     * Zwraca liczbę dni, które miały sprzedaż > 0.
+     */
+    @Query(value = """
+  SELECT COUNT(DISTINCT CAST(r.DATA_ROZ AS DATE))
+  FROM RACHUNKI r
+  WHERE r.DATA_ROZ >= :from
+    AND r.DATA_ROZ < :to
+    AND r.WART_NU > 0
+  """, nativeQuery = true)
+    long countDaysWithSalesInDateRange(@Param("from") LocalDateTime from,
+                                       @Param("to") LocalDateTime to);
+    
+    /**
+     * Zlicza liczbę unikalnych dni ze sprzedażą w zadanym zakresie dat dla konkretnych sprzedawców.
+     * Zwraca liczbę dni, które miały sprzedaż > 0 dla tych sprzedawców.
+     */
+    @Query(value = """
+  SELECT COUNT(DISTINCT CAST(r.DATA_ROZ AS DATE))
+  FROM RACHUNKI r
+  WHERE r.DATA_ROZ >= :from
+    AND r.DATA_ROZ < :to
+    AND r.WART_NU > 0
+    AND r.ID_UZ IN (:sellerIds)
+  """, nativeQuery = true)
+    long countDaysWithSalesInDateRangeBySellers(@Param("from") LocalDateTime from,
+                                                 @Param("to") LocalDateTime to,
+                                                 @Param("sellerIds") Collection<Integer> sellerIds);
     /**
      * Suma sprzedaży KUCHNI liczona po konkretnych towarach (ID_TW), z korektą zestawów.
      */
